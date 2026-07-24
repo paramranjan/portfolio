@@ -28,8 +28,8 @@ test('disables the morph for mobile and reduced-motion users', () => {
 })
 
 test('uses the original hybrid scroll interpolation rate', () => {
-  assert.equal(smoothHeaderProgress(0, 1), 0.16)
-  assert.equal(smoothHeaderProgress(0.5, 1), 0.58)
+  assert.equal(smoothHeaderProgress(0, 1), 0.24)
+  assert.equal(smoothHeaderProgress(0.5, 1), 0.62)
   assert.equal(smoothHeaderProgress(0.9995, 1), 1)
 })
 

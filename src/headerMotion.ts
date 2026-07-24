@@ -16,7 +16,7 @@ export function isHeaderMorphEnabled(
 }
 
 export function smoothHeaderProgress(current: number, target: number) {
-  const next = current + (target - current) * 0.16
+  const next = current + (target - current) * 0.24
   return Math.abs(target - next) < 0.001 ? target : next
 }
 
