@@ -33,6 +33,11 @@ test('uses the original hybrid scroll interpolation rate', () => {
   assert.equal(smoothHeaderProgress(0.9995, 1), 1)
 })
 
+test('returns to full width faster than it collapses', () => {
+  assert.ok(Math.abs(smoothHeaderProgress(1, 0) - 0.68) < 0.000001)
+  assert.ok(Math.abs(smoothHeaderProgress(0.5, 0) - 0.34) < 0.000001)
+})
+
 test('remounts the header when Motion styles turn on or off', () => {
   assert.equal(getHeaderRenderKey(true), 'motion')
   assert.equal(getHeaderRenderKey(false), 'static')
