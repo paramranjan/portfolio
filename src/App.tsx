@@ -11,8 +11,10 @@ import './App.css'
 import {
   getHeaderMorphLayout,
   getHeaderRenderKey,
+  getResponsiveHeaderProgress,
+  getHeaderScrollProgress,
+  getHeaderShapeProgress,
   isHeaderMorphEnabled,
-  smoothHeaderProgress,
 } from './headerMotion.ts'
 import {
   HERO_FONT_SIZE_MAX,
@@ -222,7 +224,6 @@ function ProjectVisual({ type }: { type: string }) {
 }
 
 function App() {
-  const [afterHours, setAfterHours] = useState(false)
   const [headerVariant, setHeaderVariant] = useState<HeaderVariant>(() => {
     const saved = localStorage.getItem('portfolio-header-variant')
     return saved === 'floating' ||
@@ -248,9 +249,8 @@ function App() {
   const headerRef = useRef<HTMLElement>(null)
   const shouldReduceMotion = useReducedMotion()
   const { scrollY } = useScroll()
-  const motionProgress = useMotionValue(
-    Math.min(Math.max(window.scrollY / 180, 0), 1),
-  )
+  const motionProgress = useMotionValue(getHeaderScrollProgress(window.scrollY))
+  const motionTargetRef = useRef(getHeaderScrollProgress(window.scrollY))
   const motionEnabled =
     headerVariant === 'motion-morph' &&
     isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
@@ -282,14 +282,19 @@ function App() {
     [0, 1],
     [pagePadding, 22],
   )
-  const motionRadius = useTransform(motionProgress, [0, 1], [0, 999])
-  const motionBorderColor = useTransform(
+  const motionShapeProgress = useTransform(
     motionProgress,
+    [0, 0.03, 1],
+    [0, 0, 1],
+  )
+  const motionRadius = useTransform(motionShapeProgress, [0, 1], [0, 999])
+  const motionBorderColor = useTransform(
+    motionShapeProgress,
     [0, 1],
     ['rgba(241, 240, 235, 0)', 'rgba(241, 240, 235, 0.18)'],
   )
   const motionDivider = useTransform(
-    motionProgress,
+    motionShapeProgress,
     [0, 1],
     [
       'inset 0 -1px 0 rgba(241, 240, 235, 0.18)',
@@ -313,12 +318,14 @@ function App() {
   useAnimationFrame(() => {
     if (!motionEnabled) return
 
-    const targetProgress = Math.min(Math.max(scrollY.get() / 180, 0), 1)
+    const targetProgress = getHeaderScrollProgress(scrollY.get())
     const currentProgress = motionProgress.get()
-    const nextProgress = smoothHeaderProgress(
+    const nextProgress = getResponsiveHeaderProgress(
       currentProgress,
       targetProgress,
+      motionTargetRef.current,
     )
+    motionTargetRef.current = targetProgress
 
     if (nextProgress !== currentProgress) {
       motionProgress.set(nextProgress)
@@ -344,7 +351,9 @@ function App() {
   useEffect(() => {
     if (!motionEnabled) return
 
-    motionProgress.set(Math.min(Math.max(scrollY.get() / 180, 0), 1))
+    const progress = getHeaderScrollProgress(scrollY.get())
+    motionTargetRef.current = progress
+    motionProgress.set(progress)
   }, [motionEnabled, motionProgress, scrollY])
 
   useEffect(() => {
@@ -369,20 +378,25 @@ function App() {
       return
     }
 
-    let currentProgress = Math.min(Math.max(window.scrollY / 180, 0), 1)
+    let currentProgress = getHeaderScrollProgress(window.scrollY)
     let targetProgress = currentProgress
+    let previousTargetProgress = targetProgress
     let frame = 0
 
     const render = () => {
-      currentProgress = smoothHeaderProgress(
+      frame = 0
+      currentProgress = getResponsiveHeaderProgress(
         currentProgress,
         targetProgress,
+        previousTargetProgress,
       )
+      previousTargetProgress = targetProgress
 
       const { pagePadding, floatingInset } = getHeaderMorphLayout(
         window.innerWidth,
       )
       const padding = pagePadding + (22 - pagePadding) * currentProgress
+      const shapeProgress = getHeaderShapeProgress(currentProgress)
 
       header.style.setProperty(
         '--hybrid-top',
@@ -398,16 +412,16 @@ function App() {
       )
       header.style.setProperty(
         '--hybrid-radius',
-        `${999 * currentProgress}px`,
+        `${999 * shapeProgress}px`,
       )
       header.style.setProperty('--hybrid-padding', `${padding}px`)
       header.style.setProperty(
         '--hybrid-border-opacity',
-        `${0.18 * currentProgress}`,
+        `${0.18 * shapeProgress}`,
       )
       header.style.setProperty(
         '--hybrid-divider-opacity',
-        `${0.18 * (1 - currentProgress)}`,
+        `${0.18 * (1 - shapeProgress)}`,
       )
 
       if (currentProgress !== targetProgress) {
@@ -416,9 +430,11 @@ function App() {
     }
 
     const updateTarget = () => {
-      targetProgress = Math.min(Math.max(window.scrollY / 180, 0), 1)
-      window.cancelAnimationFrame(frame)
-      frame = window.requestAnimationFrame(render)
+      previousTargetProgress = targetProgress
+      targetProgress = getHeaderScrollProgress(window.scrollY)
+      if (frame === 0) {
+        frame = window.requestAnimationFrame(render)
+      }
     }
 
     render()
@@ -433,7 +449,7 @@ function App() {
   }, [hybridEnabled])
 
   return (
-    <div className={afterHours ? 'site site--after-hours' : 'site'}>
+    <div className="site">
       <div className="noise-overlay" aria-hidden="true">
         <div className="noise-overlay__tile" />
       </div>
@@ -471,8 +487,16 @@ function App() {
             <p className="eyebrow">Designer / DJ / Perpetually curious</p>
             <h1>
               Product designer working at the intersection of{' '}
-              <em>scale, craft and complex systems.</em> Currently working at
-              Microsoft.
+              <em>scale, craft and complex systems.</em> Currently working at{' \u00a0'}
+              <span className="microsoft-lockup">
+                <span className="microsoft-bitmap" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                Microsoft.
+              </span>
             </h1>
           </div>
 
@@ -484,9 +508,11 @@ function App() {
         </section>
 
         <section className="work section-shell" id="work">
-          <div className="section-heading">
-            <p className="section-kicker">01 / Selected work</p>
-            <h2>Shipped with intent.</h2>
+          <div className="section-heading section-heading--work">
+            <div className="section-heading__intro">
+              <p className="section-kicker">01 / Selected work</p>
+              <h2>Featured projects</h2>
+            </div>
             <p>
               A selection of enterprise systems and product experiences shaped
               through research, collaboration and attention to detail.
@@ -613,15 +639,6 @@ function App() {
           <span className="footer-location">
             Hyderabad, IN <LocalTime />
           </span>
-          <button
-            type="button"
-            className="after-hours-toggle"
-            aria-pressed={afterHours}
-            onClick={() => setAfterHours((current) => !current)}
-          >
-            <span className="toggle-dot" />
-            {afterHours ? 'Work mode' : 'After hours'}
-          </button>
           <a href="#top">Back to top ↑</a>
         </div>
       </footer>
