@@ -107,9 +107,10 @@ button {
     scroll-behavior: auto;
   }
 
-  *,
-  *::before,
-  *::after {
+  .site[data-motion-profile='original'],
+  .site[data-motion-profile='original'] *,
+  .site[data-motion-profile='original'] *::before,
+  .site[data-motion-profile='original'] *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

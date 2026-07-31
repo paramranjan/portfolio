@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import {
   motion,
   useAnimationFrame,
   useMotionValue,
-  useReducedMotion,
   useScroll,
   useTransform,
 } from 'motion/react'
@@ -17,6 +22,38 @@ import {
   isHeaderMorphEnabled,
 } from './headerMotion.ts'
 import {
+  ASCII_ASSEMBLY_END_DEFAULT,
+  ASCII_COPY_DELAY_DEFAULT,
+  ASCII_COPY_DURATION_DEFAULT,
+  ASCII_COPY_RISE_DEFAULT,
+  ASCII_DENSITY_MAX,
+  ASCII_DENSITY_MIN,
+  ASCII_DEPTH_MAX,
+  ASCII_DEPTH_MIN,
+  ASCII_DURATION_MAX,
+  ASCII_DURATION_MIN,
+  ASCII_PLAY_INTENSITY_DEFAULT,
+  ASCII_PLAY_SPEED_DEFAULT,
+  ASCII_SCALE_MAX,
+  ASCII_SCALE_MIN,
+  ASCII_REVEAL_DURATION_DEFAULT,
+  ASCII_ROTATION_END_DEFAULT,
+  ASCII_START_ROTATION_DEFAULT,
+  ASCII_TILT_MAX,
+  ASCII_TILT_MIN,
+  ASCII_TRAVEL_DURATION_DEFAULT,
+  asciiPalettes,
+  getAsciiEasingCss,
+  normalizeAsciiDensity,
+  normalizeAsciiDepth,
+  normalizeAsciiDuration,
+  normalizeAsciiPalette,
+  normalizeAsciiRestState,
+  normalizeAsciiScale,
+  normalizeAsciiTilt,
+  type AsciiPalette,
+} from './asciiTweaks.ts'
+import {
   HERO_FONT_SIZE_MAX,
   HERO_FONT_SIZE_MIN,
   getMobileHeroFontSize,
@@ -27,6 +64,11 @@ import {
   type HeroAlignment,
   type HeroFont,
 } from './heroTweaks.ts'
+import { AsciiLogo } from './AsciiLogo.tsx'
+import {
+  normalizeMotionProfile,
+  type MotionProfile,
+} from './motionProfile.ts'
 
 type HeaderVariant =
   | 'full-width'
@@ -34,6 +76,38 @@ type HeaderVariant =
   | 'split'
   | 'scroll-morph'
   | 'motion-morph'
+
+function useLiveReducedMotion() {
+  const [reducedMotion, setReducedMotion] = useState(() =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    )
+    const updatePreference = () => setReducedMotion(mediaQuery.matches)
+
+    updatePreference()
+    mediaQuery.addEventListener('change', updatePreference)
+    return () => mediaQuery.removeEventListener('change', updatePreference)
+  }, [])
+
+  return reducedMotion
+}
+
+const HERO_REPLAY_PROXIMITY_MARGIN = 160
+const IMPROVED_HEADLINE_STAGGER = 50
+
+function isHeroInOrNearViewport(hero: HTMLElement | null) {
+  if (!hero) return true
+
+  const bounds = hero.getBoundingClientRect()
+  return (
+    bounds.bottom >= -HERO_REPLAY_PROXIMITY_MARGIN &&
+    bounds.top <= window.innerHeight + HERO_REPLAY_PROXIMITY_MARGIN
+  )
+}
 
 const projects = [
   {
@@ -223,53 +297,38 @@ function ProjectVisual({ type }: { type: string }) {
   return <AdobeVisual />
 }
 
-function App() {
-  const [headerVariant, setHeaderVariant] = useState<HeaderVariant>(() => {
-    const saved = localStorage.getItem('portfolio-header-variant')
-    return saved === 'floating' ||
-      saved === 'split' ||
-      saved === 'scroll-morph' ||
-      saved === 'motion-morph'
-      ? saved
-      : 'full-width'
-  })
-  const [tweaksOpen, setTweaksOpen] = useState(false)
-  const [heroAlignment, setHeroAlignment] = useState<HeroAlignment>(() =>
-    normalizeHeroAlignment(
-      localStorage.getItem('portfolio-hero-alignment'),
-    ),
+function HeaderContents() {
+  return (
+    <>
+      <a className="wordmark" href="#top" aria-label="Param Ranjan, home">
+        PR<span>®</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#work">Work</a>
+        <span className="header-disabled" aria-disabled="true">
+          About
+        </span>
+        <a href="#playground">Playground</a>
+      </nav>
+      <a className="header-contact" href="#contact">
+        Connect <span>↗</span>
+      </a>
+    </>
   )
-  const [heroFontSize, setHeroFontSize] = useState(() =>
-    normalizeHeroFontSize(localStorage.getItem('portfolio-hero-font-size')),
-  )
-  const [heroFont, setHeroFont] = useState<HeroFont>(() =>
-    normalizeHeroFont(localStorage.getItem('portfolio-hero-font')),
-  )
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
-  const headerRef = useRef<HTMLElement>(null)
-  const shouldReduceMotion = useReducedMotion()
+}
+
+function OriginalMotionHeader({
+  entranceComplete,
+  viewportWidth,
+}: {
+  entranceComplete: boolean
+  viewportWidth: number
+}) {
   const { scrollY } = useScroll()
   const motionProgress = useMotionValue(getHeaderScrollProgress(window.scrollY))
   const motionTargetRef = useRef(getHeaderScrollProgress(window.scrollY))
-  const motionEnabled =
-    headerVariant === 'motion-morph' &&
-    isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
-  const hybridEnabled =
-    headerVariant === 'scroll-morph' &&
-    isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
   const { pagePadding, floatingInset } =
     getHeaderMorphLayout(viewportWidth)
-  const selectedHeroFont =
-    heroFonts.find((font) => font.value === heroFont) ?? heroFonts[0]
-  const heroStyle: CSSProperties & {
-    '--hero-font-family': string
-    '--hero-font-size': string
-    '--hero-mobile-font-size': string
-  } = {
-    '--hero-font-family': selectedHeroFont.family,
-    '--hero-font-size': `${heroFontSize}px`,
-    '--hero-mobile-font-size': `${getMobileHeroFontSize(heroFontSize)}px`,
-  }
   const motionTop = useTransform(motionProgress, [0, 1], [0, 14])
   const motionInset = useTransform(
     motionProgress,
@@ -301,23 +360,8 @@ function App() {
       'inset 0 -1px 0 rgba(241, 240, 235, 0)',
     ],
   )
-  const motionHeaderStyle = motionEnabled
-    ? {
-        top: motionTop,
-        right: motionInset,
-        left: motionInset,
-        height: motionHeight,
-        paddingLeft: motionPadding,
-        paddingRight: motionPadding,
-        borderRadius: motionRadius,
-        borderColor: motionBorderColor,
-        boxShadow: motionDivider,
-      }
-    : undefined
 
   useAnimationFrame(() => {
-    if (!motionEnabled) return
-
     const targetProgress = getHeaderScrollProgress(scrollY.get())
     const currentProgress = motionProgress.get()
     const nextProgress = getResponsiveHeaderProgress(
@@ -333,11 +377,154 @@ function App() {
   })
 
   useEffect(() => {
+    const progress = getHeaderScrollProgress(scrollY.get())
+    motionTargetRef.current = progress
+    motionProgress.set(progress)
+  }, [motionProgress, scrollY])
+
+  return (
+    <motion.header
+      className="site-header"
+      data-variant="motion-morph"
+      data-entrance-visible={entranceComplete}
+      aria-hidden={!entranceComplete}
+      style={{
+        top: motionTop,
+        right: motionInset,
+        left: motionInset,
+        height: motionHeight,
+        paddingLeft: motionPadding,
+        paddingRight: motionPadding,
+        borderRadius: motionRadius,
+        borderColor: motionBorderColor,
+        boxShadow: motionDivider,
+      }}
+    >
+      <HeaderContents />
+    </motion.header>
+  )
+}
+
+function App() {
+  const [motionProfile, setMotionProfile] = useState<MotionProfile>(() =>
+    normalizeMotionProfile(
+      localStorage.getItem('portfolio-motion-profile'),
+    ),
+  )
+  const [headerVariant, setHeaderVariant] = useState<HeaderVariant>(() => {
+    const saved = localStorage.getItem('portfolio-header-variant')
+    return saved === 'floating' ||
+      saved === 'split' ||
+      saved === 'scroll-morph' ||
+      saved === 'motion-morph'
+      ? saved
+      : 'full-width'
+  })
+  const [tweaksOpen, setTweaksOpen] = useState(false)
+  const [heroAlignment, setHeroAlignment] = useState<HeroAlignment>(() =>
+    normalizeHeroAlignment(
+      localStorage.getItem('portfolio-hero-alignment-v2') ?? 'center',
+    ),
+  )
+  const [heroFontSize, setHeroFontSize] = useState(() =>
+    normalizeHeroFontSize(localStorage.getItem('portfolio-hero-font-size')),
+  )
+  const [heroFont, setHeroFont] = useState<HeroFont>(() =>
+    normalizeHeroFont(localStorage.getItem('portfolio-hero-font')),
+  )
+  const [asciiScale, setAsciiScale] = useState(() =>
+    normalizeAsciiScale(localStorage.getItem('portfolio-ascii-scale')),
+  )
+  const [asciiDensity, setAsciiDensity] = useState(() =>
+    normalizeAsciiDensity(localStorage.getItem('portfolio-ascii-density-v2')),
+  )
+  const [asciiDepth, setAsciiDepth] = useState(() =>
+    normalizeAsciiDepth(localStorage.getItem('portfolio-ascii-depth')),
+  )
+  const [asciiTilt, setAsciiTilt] = useState(() =>
+    normalizeAsciiTilt(localStorage.getItem('portfolio-ascii-tilt')),
+  )
+  const [asciiDuration, setAsciiDuration] = useState(() =>
+    normalizeAsciiDuration(localStorage.getItem('portfolio-ascii-duration')),
+  )
+  const [asciiPalette, setAsciiPalette] = useState<AsciiPalette>(() =>
+    normalizeAsciiPalette(localStorage.getItem('portfolio-ascii-palette')),
+  )
+  const [asciiRestStateEnabled, setAsciiRestStateEnabled] = useState(() =>
+    normalizeAsciiRestState(
+      localStorage.getItem('portfolio-ascii-rest-state'),
+    ),
+  )
+  const [asciiReplayKey, setAsciiReplayKey] = useState(0)
+  const [asciiReady, setAsciiReady] = useState(false)
+  const [asciiComplete, setAsciiComplete] = useState(false)
+  const [
+    asciiEntranceSettledWithoutAnimation,
+    setAsciiEntranceSettledWithoutAnimation,
+  ] = useState(false)
+  const [entranceComplete, setEntranceComplete] = useState(false)
+  const [postHeroContentVisible, setPostHeroContentVisible] =
+    useState(false)
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+  const headerRef = useRef<HTMLElement>(null)
+  const heroRef = useRef<HTMLElement>(null)
+  const hideHeaderForEntranceRef = useRef(true)
+  const shouldReduceMotion = useLiveReducedMotion()
+  const originalMotionEnabled =
+    motionProfile === 'original' &&
+    headerVariant === 'motion-morph' &&
+    isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
+  const eventDrivenMorphEnabled =
+    ((motionProfile === 'original' &&
+      headerVariant === 'scroll-morph') ||
+      (motionProfile === 'improved' &&
+        (headerVariant === 'scroll-morph' ||
+          headerVariant === 'motion-morph'))) &&
+    isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
+  const selectedHeroFont =
+    heroFonts.find((font) => font.value === heroFont) ?? heroFonts[0]
+  const heroStyle: CSSProperties & {
+    '--hero-font-family': string
+    '--hero-font-size': string
+    '--hero-mobile-font-size': string
+    '--ascii-logo-delay': string
+    '--ascii-logo-duration': string
+    '--ascii-copy-delay': string
+    '--ascii-copy-duration': string
+    '--ascii-copy-rise': string
+    '--ascii-footer-delay': string
+    '--ascii-footer-duration': string
+    '--ascii-motion-ease': string
+    '--ascii-improved-copy-delay': string
+    '--ascii-improved-headline-delay': string
+    '--ascii-improved-footer-delay': string
+  } = {
+    '--hero-font-family': selectedHeroFont.family,
+    '--hero-font-size': `${heroFontSize}px`,
+    '--hero-mobile-font-size': `${getMobileHeroFontSize(heroFontSize)}px`,
+    '--ascii-logo-delay': `${asciiDuration}ms`,
+    '--ascii-logo-duration': `${ASCII_TRAVEL_DURATION_DEFAULT}ms`,
+    '--ascii-copy-delay': `${asciiDuration + ASCII_COPY_DELAY_DEFAULT}ms`,
+    '--ascii-copy-duration': `${ASCII_COPY_DURATION_DEFAULT}ms`,
+    '--ascii-copy-rise': `${ASCII_COPY_RISE_DEFAULT}px`,
+    '--ascii-footer-delay': `${asciiDuration + ASCII_COPY_DELAY_DEFAULT + 250}ms`,
+    '--ascii-footer-duration': `${ASCII_COPY_DURATION_DEFAULT - 100}ms`,
+    '--ascii-motion-ease': getAsciiEasingCss('out'),
+    '--ascii-improved-copy-delay': `${ASCII_COPY_DELAY_DEFAULT}ms`,
+    '--ascii-improved-headline-delay': `${ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER}ms`,
+    '--ascii-improved-footer-delay': `${ASCII_COPY_DELAY_DEFAULT + 250}ms`,
+  }
+
+  useEffect(() => {
     localStorage.setItem('portfolio-header-variant', headerVariant)
   }, [headerVariant])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-hero-alignment', heroAlignment)
+    localStorage.setItem('portfolio-motion-profile', motionProfile)
+  }, [motionProfile])
+
+  useEffect(() => {
+    localStorage.setItem('portfolio-hero-alignment-v2', heroAlignment)
   }, [heroAlignment])
 
   useEffect(() => {
@@ -349,12 +536,163 @@ function App() {
   }, [heroFont])
 
   useEffect(() => {
-    if (!motionEnabled) return
+    localStorage.setItem('portfolio-ascii-scale', String(asciiScale))
+  }, [asciiScale])
 
-    const progress = getHeaderScrollProgress(scrollY.get())
-    motionTargetRef.current = progress
-    motionProgress.set(progress)
-  }, [motionEnabled, motionProgress, scrollY])
+  useEffect(() => {
+    localStorage.setItem('portfolio-ascii-density-v2', String(asciiDensity))
+  }, [asciiDensity])
+
+  useEffect(() => {
+    localStorage.setItem('portfolio-ascii-depth', String(asciiDepth))
+  }, [asciiDepth])
+
+  useEffect(() => {
+    localStorage.setItem('portfolio-ascii-tilt', String(asciiTilt))
+  }, [asciiTilt])
+
+  useEffect(() => {
+    localStorage.setItem('portfolio-ascii-duration', String(asciiDuration))
+  }, [asciiDuration])
+
+  useEffect(() => {
+    localStorage.setItem('portfolio-ascii-palette', asciiPalette)
+  }, [asciiPalette])
+
+  useEffect(() => {
+    localStorage.setItem(
+      'portfolio-ascii-rest-state',
+      String(asciiRestStateEnabled),
+    )
+  }, [asciiRestStateEnabled])
+
+  useEffect(() => {
+    if (motionProfile !== 'original') return
+
+    if (shouldReduceMotion) {
+      setEntranceComplete(true)
+      setPostHeroContentVisible(true)
+      hideHeaderForEntranceRef.current = true
+      return
+    }
+
+    if (hideHeaderForEntranceRef.current) {
+      setEntranceComplete(false)
+      setPostHeroContentVisible(false)
+    } else {
+      setPostHeroContentVisible(true)
+    }
+    const contentTimer = hideHeaderForEntranceRef.current
+      ? window.setTimeout(
+          () => setPostHeroContentVisible(true),
+          asciiDuration + ASCII_COPY_DELAY_DEFAULT,
+        )
+      : 0
+    const totalDuration =
+      asciiDuration +
+      Math.max(
+        ASCII_TRAVEL_DURATION_DEFAULT,
+        ASCII_COPY_DELAY_DEFAULT + ASCII_COPY_DURATION_DEFAULT,
+      )
+    const timer = window.setTimeout(() => {
+      setEntranceComplete(true)
+      hideHeaderForEntranceRef.current = true
+    }, totalDuration)
+
+    return () => {
+      window.clearTimeout(contentTimer)
+      window.clearTimeout(timer)
+    }
+  }, [
+    asciiDuration,
+    asciiReplayKey,
+    motionProfile,
+    shouldReduceMotion,
+  ])
+
+  useEffect(() => {
+    if (motionProfile !== 'improved') return
+
+    if (shouldReduceMotion) {
+      setPostHeroContentVisible(true)
+      return
+    }
+
+    if (!asciiComplete) return
+
+    if (!hideHeaderForEntranceRef.current) {
+      setPostHeroContentVisible(true)
+      return
+    }
+
+    const timer = window.setTimeout(
+      () => setPostHeroContentVisible(true),
+      ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER,
+    )
+
+    return () => window.clearTimeout(timer)
+  }, [asciiComplete, motionProfile, shouldReduceMotion])
+
+  useEffect(() => {
+    if (motionProfile !== 'improved' || !asciiComplete) return
+
+    if (shouldReduceMotion) {
+      setAsciiEntranceSettledWithoutAnimation(true)
+      setEntranceComplete(true)
+      hideHeaderForEntranceRef.current = true
+      return
+    }
+
+    const postAssemblyDuration = Math.max(
+      ASCII_TRAVEL_DURATION_DEFAULT,
+      ASCII_COPY_DELAY_DEFAULT + ASCII_COPY_DURATION_DEFAULT,
+    )
+    const timer = window.setTimeout(() => {
+      setEntranceComplete(true)
+      hideHeaderForEntranceRef.current = true
+    }, postAssemblyDuration)
+
+    return () => window.clearTimeout(timer)
+  }, [asciiComplete, motionProfile, shouldReduceMotion])
+
+  useEffect(() => {
+    if (
+      motionProfile !== 'improved' ||
+      asciiComplete ||
+      entranceComplete
+    ) {
+      return
+    }
+
+    const hero = heroRef.current
+    if (!hero) return
+
+    const revealHeader = () => {
+      setEntranceComplete(true)
+    }
+
+    if (!isHeroInOrNearViewport(hero)) {
+      revealHeader()
+      return
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) return
+
+      revealHeader()
+      observer.disconnect()
+    }, {
+      rootMargin: `${HERO_REPLAY_PROXIMITY_MARGIN}px 0px`,
+    })
+    observer.observe(hero)
+
+    return () => observer.disconnect()
+  }, [
+    asciiComplete,
+    asciiReplayKey,
+    entranceComplete,
+    motionProfile,
+  ])
 
   useEffect(() => {
     const updateViewportWidth = () => setViewportWidth(window.innerWidth)
@@ -367,7 +705,7 @@ function App() {
     const header = headerRef.current
     if (!header) return
 
-    if (!hybridEnabled) {
+    if (!eventDrivenMorphEnabled) {
       header.style.removeProperty('--hybrid-top')
       header.style.removeProperty('--hybrid-inset')
       header.style.removeProperty('--hybrid-height')
@@ -446,43 +784,107 @@ function App() {
       window.removeEventListener('scroll', updateTarget)
       window.removeEventListener('resize', updateTarget)
     }
-  }, [hybridEnabled])
+  }, [eventDrivenMorphEnabled])
+
+  const replayAsciiEntrance = useCallback(() => {
+    const hideHeaderForEntrance = isHeroInOrNearViewport(heroRef.current)
+    hideHeaderForEntranceRef.current = hideHeaderForEntrance
+    setAsciiReady(false)
+    setAsciiComplete(false)
+    setAsciiEntranceSettledWithoutAnimation(false)
+    setEntranceComplete(!hideHeaderForEntrance)
+    setPostHeroContentVisible(!hideHeaderForEntrance)
+    setAsciiReplayKey((key) => key + 1)
+  }, [])
+
+  const selectMotionProfile = useCallback(
+    (profile: MotionProfile) => {
+      if (profile === motionProfile) return
+      setMotionProfile(profile)
+      replayAsciiEntrance()
+    },
+    [motionProfile, replayAsciiEntrance],
+  )
+
+  const handleAsciiReady = useCallback(() => {
+    setAsciiReady(true)
+  }, [])
+
+  const handleAsciiComplete = useCallback(() => {
+    setAsciiComplete(true)
+  }, [])
 
   return (
-    <div className="site">
+    <div
+      className="site"
+      data-motion-profile={motionProfile}
+      data-post-hero-content-visible={postHeroContentVisible}
+    >
       <div className="noise-overlay" aria-hidden="true">
         <div className="noise-overlay__tile" />
       </div>
-      <motion.header
-        key={getHeaderRenderKey(motionEnabled)}
-        ref={headerRef}
-        className="site-header"
-        data-variant={headerVariant}
-        style={motionHeaderStyle}
-      >
-        <a className="wordmark" href="#top" aria-label="Param Ranjan, home">
-          PR<span>®</span>
-        </a>
-        <nav aria-label="Primary navigation">
-          <a href="#work">Work</a>
-          <span className="header-disabled" aria-disabled="true">
-            About
-          </span>
-          <a href="#playground">Playground</a>
-        </nav>
-        <a className="header-contact" href="#contact">
-          Connect <span>↗</span>
-        </a>
-      </motion.header>
+      {originalMotionEnabled ? (
+        <OriginalMotionHeader
+          key={getHeaderRenderKey(true)}
+          entranceComplete={entranceComplete}
+          viewportWidth={viewportWidth}
+        />
+      ) : (
+        <motion.header
+          key={getHeaderRenderKey(false)}
+          ref={headerRef}
+          className="site-header"
+          data-variant={headerVariant}
+          data-entrance-visible={entranceComplete}
+          aria-hidden={!entranceComplete}
+        >
+          <HeaderContents />
+        </motion.header>
+      )}
 
       <main>
         <section
+          ref={heroRef}
           className="hero"
           id="top"
+          key={asciiReplayKey}
           data-hero-alignment={heroAlignment}
           data-hero-font={heroFont}
+          data-ascii-ready={asciiReady}
+          data-ascii-complete={asciiComplete}
+          data-ascii-settled-without-animation={
+            asciiEntranceSettledWithoutAnimation
+          }
           style={heroStyle}
         >
+          <AsciiLogo
+            scale={asciiScale / 100}
+            density={asciiDensity}
+            depth={asciiDepth / 100}
+            tilt={asciiTilt}
+            duration={asciiDuration}
+            palette={asciiPalette}
+            startRotation={ASCII_START_ROTATION_DEFAULT}
+            rotationEnd={ASCII_ROTATION_END_DEFAULT}
+            assemblyEnd={ASCII_ASSEMBLY_END_DEFAULT}
+            revealDuration={ASCII_REVEAL_DURATION_DEFAULT}
+            easing="out"
+            playIntensity={ASCII_PLAY_INTENSITY_DEFAULT}
+            playSpeed={ASCII_PLAY_SPEED_DEFAULT}
+            restMode={asciiRestStateEnabled}
+            restStartDelay={
+              shouldReduceMotion
+                ? 0
+                : motionProfile === 'improved'
+                  ? ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER
+                  : ASCII_COPY_DELAY_DEFAULT
+            }
+            optimized={motionProfile === 'improved'}
+            reducedMotion={shouldReduceMotion === true}
+            onReady={handleAsciiReady}
+            onComplete={handleAsciiComplete}
+          />
+
           <div className="hero-copy">
             <p className="eyebrow">Designer / DJ / Perpetually curious</p>
             <h1>
@@ -500,7 +902,11 @@ function App() {
             </h1>
           </div>
 
-          <div className="hero-footer">
+          <div
+            className="hero-footer"
+            aria-hidden={!postHeroContentVisible}
+            inert={!postHeroContentVisible}
+          >
             <a href="#work">
               Selected work <span>↓</span>
             </a>
@@ -660,6 +1066,27 @@ function App() {
               </button>
             </div>
             <div className="header-tweaks__section">
+              <span className="header-tweaks__label">Motion profile</span>
+              <div className="header-tweaks__options">
+                {(
+                  [
+                    ['improved', 'Improved'],
+                    ['original', 'Original'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    aria-pressed={motionProfile === value}
+                    onClick={() => selectMotionProfile(value)}
+                    key={value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
               <span className="header-tweaks__label">Header layout</span>
               <div className="header-tweaks__options">
                 {(
@@ -744,6 +1171,173 @@ function App() {
                 ))}
               </div>
             </div>
+
+            <div className="header-tweaks__divider" />
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">ASCII palette</span>
+              <div className="header-tweaks__options header-tweaks__options--three">
+                {asciiPalettes.map((palette) => (
+                  <button
+                    type="button"
+                    aria-pressed={asciiPalette === palette.value}
+                    onClick={() => setAsciiPalette(palette.value)}
+                    key={palette.value}
+                  >
+                    {palette.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">ASCII rest state</span>
+              <div className="header-tweaks__options">
+                {(
+                  [
+                    [false, 'Off'],
+                    [true, 'Mono breathe'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    aria-pressed={asciiRestStateEnabled === value}
+                    onClick={() => setAsciiRestStateEnabled(value)}
+                    key={label}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="ascii-scale"
+              >
+                <span>ASCII scale</span>
+                <output htmlFor="ascii-scale">{asciiScale}%</output>
+              </label>
+              <input
+                id="ascii-scale"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_SCALE_MIN}
+                max={ASCII_SCALE_MAX}
+                step="1"
+                value={asciiScale}
+                onChange={(event) =>
+                  setAsciiScale(
+                    normalizeAsciiScale(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="ascii-density"
+              >
+                <span>ASCII density</span>
+                <output htmlFor="ascii-density">{asciiDensity}</output>
+              </label>
+              <input
+                id="ascii-density"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_DENSITY_MIN}
+                max={ASCII_DENSITY_MAX}
+                step="1"
+                value={asciiDensity}
+                onChange={(event) =>
+                  setAsciiDensity(
+                    normalizeAsciiDensity(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="ascii-depth"
+              >
+                <span>3D depth</span>
+                <output htmlFor="ascii-depth">{asciiDepth}</output>
+              </label>
+              <input
+                id="ascii-depth"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_DEPTH_MIN}
+                max={ASCII_DEPTH_MAX}
+                step="1"
+                value={asciiDepth}
+                onChange={(event) =>
+                  setAsciiDepth(
+                    normalizeAsciiDepth(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="ascii-tilt"
+              >
+                <span>Final tilt</span>
+                <output htmlFor="ascii-tilt">{asciiTilt}°</output>
+              </label>
+              <input
+                id="ascii-tilt"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_TILT_MIN}
+                max={ASCII_TILT_MAX}
+                step="1"
+                value={asciiTilt}
+                onChange={(event) =>
+                  setAsciiTilt(normalizeAsciiTilt(event.currentTarget.value))
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="ascii-duration"
+              >
+                <span>Entrance speed</span>
+                <output htmlFor="ascii-duration">
+                  {(asciiDuration / 1000).toFixed(1)}s
+                </output>
+              </label>
+              <input
+                id="ascii-duration"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_DURATION_MIN}
+                max={ASCII_DURATION_MAX}
+                step="100"
+                value={asciiDuration}
+                onChange={(event) =>
+                  setAsciiDuration(
+                    normalizeAsciiDuration(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <button
+              type="button"
+              className="header-tweaks__action"
+              onClick={replayAsciiEntrance}
+            >
+              Replay ASCII entrance
+            </button>
           </div>
         )}
         <button
