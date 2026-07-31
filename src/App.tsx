@@ -98,6 +98,15 @@ function useLiveReducedMotion() {
 
 const HERO_REPLAY_PROXIMITY_MARGIN = 160
 const IMPROVED_HEADLINE_STAGGER = 50
+const ASCII_STORAGE_KEYS = {
+  scale: 'portfolio-ascii-scale-v3',
+  density: 'portfolio-ascii-density-v3',
+  depth: 'portfolio-ascii-depth-v3',
+  tilt: 'portfolio-ascii-tilt-v3',
+  duration: 'portfolio-ascii-duration-v3',
+  palette: 'portfolio-ascii-palette-v3',
+  restState: 'portfolio-ascii-rest-state-v3',
+} as const
 
 function isHeroInOrNearViewport(hero: HTMLElement | null) {
   if (!hero) return true
@@ -433,26 +442,26 @@ function App() {
     normalizeHeroFont(localStorage.getItem('portfolio-hero-font')),
   )
   const [asciiScale, setAsciiScale] = useState(() =>
-    normalizeAsciiScale(localStorage.getItem('portfolio-ascii-scale')),
+    normalizeAsciiScale(localStorage.getItem(ASCII_STORAGE_KEYS.scale)),
   )
   const [asciiDensity, setAsciiDensity] = useState(() =>
-    normalizeAsciiDensity(localStorage.getItem('portfolio-ascii-density-v2')),
+    normalizeAsciiDensity(localStorage.getItem(ASCII_STORAGE_KEYS.density)),
   )
   const [asciiDepth, setAsciiDepth] = useState(() =>
-    normalizeAsciiDepth(localStorage.getItem('portfolio-ascii-depth')),
+    normalizeAsciiDepth(localStorage.getItem(ASCII_STORAGE_KEYS.depth)),
   )
   const [asciiTilt, setAsciiTilt] = useState(() =>
-    normalizeAsciiTilt(localStorage.getItem('portfolio-ascii-tilt')),
+    normalizeAsciiTilt(localStorage.getItem(ASCII_STORAGE_KEYS.tilt)),
   )
   const [asciiDuration, setAsciiDuration] = useState(() =>
-    normalizeAsciiDuration(localStorage.getItem('portfolio-ascii-duration')),
+    normalizeAsciiDuration(localStorage.getItem(ASCII_STORAGE_KEYS.duration)),
   )
   const [asciiPalette, setAsciiPalette] = useState<AsciiPalette>(() =>
-    normalizeAsciiPalette(localStorage.getItem('portfolio-ascii-palette')),
+    normalizeAsciiPalette(localStorage.getItem(ASCII_STORAGE_KEYS.palette)),
   )
   const [asciiRestStateEnabled, setAsciiRestStateEnabled] = useState(() =>
     normalizeAsciiRestState(
-      localStorage.getItem('portfolio-ascii-rest-state'),
+      localStorage.getItem(ASCII_STORAGE_KEYS.restState),
     ),
   )
   const [asciiReplayKey, setAsciiReplayKey] = useState(0)
@@ -536,32 +545,32 @@ function App() {
   }, [heroFont])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-scale', String(asciiScale))
+    localStorage.setItem(ASCII_STORAGE_KEYS.scale, String(asciiScale))
   }, [asciiScale])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-density-v2', String(asciiDensity))
+    localStorage.setItem(ASCII_STORAGE_KEYS.density, String(asciiDensity))
   }, [asciiDensity])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-depth', String(asciiDepth))
+    localStorage.setItem(ASCII_STORAGE_KEYS.depth, String(asciiDepth))
   }, [asciiDepth])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-tilt', String(asciiTilt))
+    localStorage.setItem(ASCII_STORAGE_KEYS.tilt, String(asciiTilt))
   }, [asciiTilt])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-duration', String(asciiDuration))
+    localStorage.setItem(ASCII_STORAGE_KEYS.duration, String(asciiDuration))
   }, [asciiDuration])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-ascii-palette', asciiPalette)
+    localStorage.setItem(ASCII_STORAGE_KEYS.palette, asciiPalette)
   }, [asciiPalette])
 
   useEffect(() => {
     localStorage.setItem(
-      'portfolio-ascii-rest-state',
+      ASCII_STORAGE_KEYS.restState,
       String(asciiRestStateEnabled),
     )
   }, [asciiRestStateEnabled])

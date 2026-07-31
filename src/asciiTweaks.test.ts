@@ -45,11 +45,11 @@ test('restores valid ASCII logo settings', () => {
 })
 
 test('uses safe defaults for invalid ASCII logo settings', () => {
-  assert.equal(normalizeAsciiScale('large'), 100)
+  assert.equal(normalizeAsciiScale('large'), 91)
   assert.equal(normalizeAsciiDensity('dense'), 4)
-  assert.equal(normalizeAsciiDepth('deep'), 13)
-  assert.equal(normalizeAsciiTilt('angled'), -7)
-  assert.equal(normalizeAsciiDuration('slow'), 2600)
+  assert.equal(normalizeAsciiDepth('deep'), 11)
+  assert.equal(normalizeAsciiTilt('angled'), 0)
+  assert.equal(normalizeAsciiDuration('slow'), 1900)
   assert.equal(normalizeAsciiPalette('rainbow'), 'site')
   assert.equal(normalizeAsciiStartRotation('left'), 0)
   assert.equal(normalizeAsciiRotationEnd('late'), 30)
@@ -62,8 +62,18 @@ test('uses safe defaults for invalid ASCII logo settings', () => {
   assert.equal(normalizeAsciiEasing('spring'), 'out')
   assert.equal(normalizeAsciiPlayIntensity('high'), 19)
   assert.equal(normalizeAsciiPlaySpeed('fast'), 140)
-  assert.equal(normalizeAsciiRestState(null), false)
-  assert.equal(normalizeAsciiRestState('enabled'), false)
+  assert.equal(normalizeAsciiRestState(null), true)
+  assert.equal(normalizeAsciiRestState('enabled'), true)
+})
+
+test('uses the live ASCII preset when storage is missing', () => {
+  assert.equal(normalizeAsciiScale(null), 91)
+  assert.equal(normalizeAsciiDensity(null), 4)
+  assert.equal(normalizeAsciiDepth(null), 11)
+  assert.equal(normalizeAsciiTilt(null), 0)
+  assert.equal(normalizeAsciiDuration(null), 1900)
+  assert.equal(normalizeAsciiPalette(null), 'site')
+  assert.equal(normalizeAsciiRestState(null), true)
 })
 
 test('keeps numeric ASCII controls within their supported ranges', () => {

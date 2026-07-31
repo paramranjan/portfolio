@@ -1,6 +1,6 @@
 export const ASCII_SCALE_MIN = 60
 export const ASCII_SCALE_MAX = 130
-export const ASCII_SCALE_DEFAULT = 100
+export const ASCII_SCALE_DEFAULT = 91
 
 export const ASCII_DENSITY_MIN = 1
 export const ASCII_DENSITY_MAX = 4
@@ -8,15 +8,15 @@ export const ASCII_DENSITY_DEFAULT = 4
 
 export const ASCII_DEPTH_MIN = 0
 export const ASCII_DEPTH_MAX = 30
-export const ASCII_DEPTH_DEFAULT = 13
+export const ASCII_DEPTH_DEFAULT = 11
 
 export const ASCII_TILT_MIN = -30
 export const ASCII_TILT_MAX = 30
-export const ASCII_TILT_DEFAULT = -7
+export const ASCII_TILT_DEFAULT = 0
 
 export const ASCII_DURATION_MIN = 1200
 export const ASCII_DURATION_MAX = 5000
-export const ASCII_DURATION_DEFAULT = 2600
+export const ASCII_DURATION_DEFAULT = 1900
 
 export const ASCII_START_ROTATION_MIN = -180
 export const ASCII_START_ROTATION_MAX = 180
@@ -58,7 +58,7 @@ export const ASCII_PLAY_SPEED_MIN = 25
 export const ASCII_PLAY_SPEED_MAX = 200
 export const ASCII_PLAY_SPEED_DEFAULT = 140
 
-export const ASCII_REST_STATE_DEFAULT = false
+export const ASCII_REST_STATE_DEFAULT = true
 
 export const asciiPalettes = [
   { value: 'site', label: 'Site' },
@@ -82,6 +82,8 @@ function normalizeInteger(
   minimum: number,
   maximum: number,
 ) {
+  if (value === null || value.trim() === '') return defaultValue
+
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return defaultValue
 
@@ -224,7 +226,9 @@ export function normalizeAsciiPlaySpeed(value: string | null) {
 }
 
 export function normalizeAsciiRestState(value: string | null) {
-  return value === 'true'
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return ASCII_REST_STATE_DEFAULT
 }
 
 export function normalizeAsciiPalette(value: string | null): AsciiPalette {
