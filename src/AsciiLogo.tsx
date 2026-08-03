@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react'
+import type {
+  AsciiCameraResponse,
+  AsciiPalette,
+} from './asciiTweaks.ts'
+import {
+  ASCII_LOGO_PALETTES,
+  ASCII_LOGO_SAMPLE_SIZE,
+  isLogoPixel,
+  randomFor,
+} from './asciiLogoSource.ts'
 
-const SAMPLE_SIZE = 96
 const GLYPHS = ['·', ':', '+', '*', '#', '@']
-const PALETTE_COLORS = {
-  site: ['#8464ff', '#f1f0eb', '#b9ff39'],
-  blue: ['#0b1c54', '#2452b9', '#4b7cff'],
-  mono: ['#555552', '#a7a7a2', '#f1f0eb'],
-} as const
 const REST_MONO_COLORS = ['#deded8', '#f0efe9', '#ffffff'] as const
 const REST_IDLE_DELAY = 2400
 const REST_ENTER_DURATION = 1200
@@ -18,6 +22,10 @@ const REST_GLYPH_PULSE_MIN = 0.015
 const REST_GLYPH_PULSE_RANGE = 0.04
 const REST_SPARKLE_THRESHOLD = 0.82
 const REST_SPARKLE_POWER = 14
+const CAMERA_MAX_YAW = (6 * Math.PI) / 180
+const CAMERA_MAX_PITCH = (4 * Math.PI) / 180
+const CAMERA_DAMPING = 12
+const CAMERA_SETTLE_THRESHOLD = 0.001
 
 type AsciiLogoProps = {
   scale: number
@@ -25,7 +33,7 @@ type AsciiLogoProps = {
   depth: number
   tilt: number
   duration: number
-  palette: keyof typeof PALETTE_COLORS
+  palette: AsciiPalette
   startRotation: number
   rotationEnd: number
   assemblyEnd: number
@@ -34,6 +42,7 @@ type AsciiLogoProps = {
   playIntensity: number
   playSpeed: number
   restMode: boolean
+  cameraResponse: AsciiCameraResponse
   restStartDelay: number
   optimized: boolean
   reducedMotion: boolean
@@ -129,41 +138,38 @@ function applyEasing(value: number, easing: AsciiLogoProps['easing']) {
   return easing === 'out' ? easeOutCubic(value) : easeInOutCubic(value)
 }
 
-function randomFor(index: number) {
-  const value = Math.sin(index * 12.9898) * 43758.5453
-  return value - Math.floor(value)
-}
-
-function isLogoPixel(red: number, green: number, blue: number) {
-  return blue > 70 && blue > red * 1.25 && blue > green * 1.12
-}
-
 function createLogoPoints(
   image: HTMLImageElement,
   sampleStep: number,
   depth: number,
 ) {
   const sourceCanvas = document.createElement('canvas')
-  sourceCanvas.width = SAMPLE_SIZE
-  sourceCanvas.height = SAMPLE_SIZE
+  sourceCanvas.width = ASCII_LOGO_SAMPLE_SIZE
+  sourceCanvas.height = ASCII_LOGO_SAMPLE_SIZE
 
   const sourceContext = sourceCanvas.getContext('2d', {
     willReadFrequently: true,
   })
   if (!sourceContext) return []
 
-  sourceContext.drawImage(image, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE)
+  sourceContext.drawImage(
+    image,
+    0,
+    0,
+    ASCII_LOGO_SAMPLE_SIZE,
+    ASCII_LOGO_SAMPLE_SIZE,
+  )
   const pixels = sourceContext.getImageData(
     0,
     0,
-    SAMPLE_SIZE,
-    SAMPLE_SIZE,
+    ASCII_LOGO_SAMPLE_SIZE,
+    ASCII_LOGO_SAMPLE_SIZE,
   ).data
   const sourcePoints: Array<{ x: number; y: number }> = []
 
-  for (let y = 0; y < SAMPLE_SIZE; y += sampleStep) {
-    for (let x = 0; x < SAMPLE_SIZE; x += sampleStep) {
-      const pixelIndex = (y * SAMPLE_SIZE + x) * 4
+  for (let y = 0; y < ASCII_LOGO_SAMPLE_SIZE; y += sampleStep) {
+    for (let x = 0; x < ASCII_LOGO_SAMPLE_SIZE; x += sampleStep) {
+      const pixelIndex = (y * ASCII_LOGO_SAMPLE_SIZE + x) * 4
       if (
         isLogoPixel(
           pixels[pixelIndex],
@@ -236,6 +242,7 @@ export function AsciiLogo({
   playIntensity,
   playSpeed,
   restMode,
+  cameraResponse,
   restStartDelay,
   optimized,
   reducedMotion,
@@ -303,7 +310,7 @@ export function AsciiLogo({
     let disposed = false
     let points: LogoPoint[] = []
     const sampleStep = 5 - density
-    const layerColors = PALETTE_COLORS[palette]
+    const layerColors = ASCII_LOGO_PALETTES[palette]
     const restColors = REST_MONO_COLORS
     let lastActivityTime = performance.now()
     let lastRestFrameTime = 0
@@ -698,7 +705,15 @@ export function AsciiLogo({
     let documentVisible = !document.hidden
     let intersecting = true
     let settledOrder: number[] | null = null
+    let cameraTargetYaw = 0
+    let cameraTargetPitch = 0
+    let cameraYaw = 0
+    let cameraPitch = 0
     let draw: FrameRequestCallback = () => {}
+    const cameraEnabled =
+      cameraResponse === 'subtle' &&
+      !rendererReducedMotion &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches
 
     const canRender = () =>
       !disposed &&
@@ -729,10 +744,13 @@ export function AsciiLogo({
       frame = 0
       if (!canRender() || !bounds) return
 
+      let frameDeltaSeconds = 0
       if (lastTimestamp === 0) {
         lastTimestamp = timestamp
-      } else if (!rendererReducedMotion) {
-        animationElapsed += timestamp - lastTimestamp
+      } else {
+        const frameDelta = timestamp - lastTimestamp
+        frameDeltaSeconds = Math.min(frameDelta / 1000, 1 / 20)
+        if (!rendererReducedMotion) animationElapsed += frameDelta
         lastTimestamp = timestamp
       }
 
@@ -751,12 +769,28 @@ export function AsciiLogo({
         clamp((progress - 0.02) / (assemblyEnd / 100 - 0.02)),
         easing,
       )
+      if (cameraEnabled && frameDeltaSeconds > 0) {
+        const damping =
+          1 - Math.exp(-CAMERA_DAMPING * frameDeltaSeconds)
+        cameraYaw += (cameraTargetYaw - cameraYaw) * damping
+        cameraPitch += (cameraTargetPitch - cameraPitch) * damping
+      }
+      const cameraMoving =
+        cameraEnabled &&
+        (Math.abs(cameraTargetYaw - cameraYaw) >
+          CAMERA_SETTLE_THRESHOLD ||
+          Math.abs(cameraTargetPitch - cameraPitch) >
+            CAMERA_SETTLE_THRESHOLD)
+      if (cameraMoving) settledOrder = null
+      const cameraEntrance = easeOutCubic(clamp((progress - 0.7) / 0.3))
       const angleY = mix(
         (startRotation * Math.PI) / 180,
         (tilt * Math.PI) / 180,
         rotationProgress,
-      )
-      const angleX = mix(0.32, 0.05, rotationProgress)
+      ) + cameraYaw * cameraEntrance
+      const angleX =
+        mix(0.32, 0.05, rotationProgress) +
+        cameraPitch * cameraEntrance
       const sinY = Math.sin(angleY)
       const cosY = Math.cos(angleY)
       const sinX = Math.sin(angleX)
@@ -818,7 +852,7 @@ export function AsciiLogo({
 
       if (settledOrder === null) {
         projectedPoints.sort((first, second) => first.depth - second.depth)
-        if (progress >= 1) {
+        if (progress >= 1 && !cameraMoving) {
           settledOrder = projectedPoints.map((point) => point.pointIndex)
         }
       }
@@ -845,6 +879,7 @@ export function AsciiLogo({
 
       if (
         progress < 1 ||
+        cameraMoving ||
         (!restReducedMotionRef.current &&
           (playIntensity > 0 ||
             restModeRef.current ||
@@ -852,6 +887,36 @@ export function AsciiLogo({
       ) {
         requestDraw()
       }
+    }
+
+    const handleCameraPointerMove = (event: PointerEvent) => {
+      const canvasBounds = canvas.getBoundingClientRect()
+      if (canvasBounds.width === 0 || canvasBounds.height === 0) return
+
+      const normalizedX = clamp(
+        (event.clientX - canvasBounds.left) / canvasBounds.width,
+      ) * 2 - 1
+      const normalizedY = clamp(
+        (event.clientY - canvasBounds.top) / canvasBounds.height,
+      ) * 2 - 1
+      cameraTargetYaw = normalizedX * CAMERA_MAX_YAW
+      cameraTargetPitch = normalizedY * -CAMERA_MAX_PITCH
+      settledOrder = null
+      requestDraw()
+    }
+
+    const handleCameraPointerLeave = () => {
+      cameraTargetYaw = 0
+      cameraTargetPitch = 0
+      settledOrder = null
+      requestDraw()
+    }
+
+    if (cameraEnabled) {
+      canvas.addEventListener('pointermove', handleCameraPointerMove, {
+        passive: true,
+      })
+      canvas.addEventListener('pointerleave', handleCameraPointerLeave)
     }
 
     const handleActivity = () => {
@@ -969,10 +1034,13 @@ export function AsciiLogo({
       window.removeEventListener('pointerdown', handleActivity)
       window.removeEventListener('keydown', handleActivity)
       window.removeEventListener('scroll', handleActivity)
+      canvas.removeEventListener('pointermove', handleCameraPointerMove)
+      canvas.removeEventListener('pointerleave', handleCameraPointerLeave)
       requestDrawRef.current = () => {}
     }
   }, [
     assemblyEnd,
+    cameraResponse,
     density,
     depth,
     duration,

@@ -5,17 +5,10 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import {
-  motion,
-  useAnimationFrame,
-  useMotionValue,
-  useScroll,
-  useTransform,
-} from 'motion/react'
+import { motion } from 'motion/react'
 import './App.css'
 import {
   getHeaderMorphLayout,
-  getHeaderRenderKey,
   getResponsiveHeaderProgress,
   getHeaderScrollProgress,
   getHeaderShapeProgress,
@@ -41,9 +34,12 @@ import {
   ASCII_START_ROTATION_DEFAULT,
   ASCII_TILT_MAX,
   ASCII_TILT_MIN,
+  ASCII_TRAVEL_DURATION_MAX,
+  ASCII_TRAVEL_DURATION_MIN,
   ASCII_TRAVEL_DURATION_DEFAULT,
   asciiPalettes,
   getAsciiEasingCss,
+  normalizeAsciiCameraResponse,
   normalizeAsciiDensity,
   normalizeAsciiDepth,
   normalizeAsciiDuration,
@@ -51,24 +47,38 @@ import {
   normalizeAsciiRestState,
   normalizeAsciiScale,
   normalizeAsciiTilt,
+  normalizeAsciiTravelDuration,
+  type AsciiCameraResponse,
   type AsciiPalette,
 } from './asciiTweaks.ts'
 import {
-  HERO_FONT_SIZE_MAX,
-  HERO_FONT_SIZE_MIN,
   getMobileHeroFontSize,
   heroFonts,
-  normalizeHeroAlignment,
-  normalizeHeroFont,
-  normalizeHeroFontSize,
   type HeroAlignment,
   type HeroFont,
 } from './heroTweaks.ts'
 import { AsciiLogo } from './AsciiLogo.tsx'
+import { HeaderAsciiMark } from './HeaderAsciiMark.tsx'
+import { CursorBallLauncher } from './CursorBallLauncher.tsx'
+import { normalizeCursorBallEnabled } from './cursorBallPhysics.ts'
 import {
-  normalizeMotionProfile,
-  type MotionProfile,
-} from './motionProfile.ts'
+  HEADER_ASCII_REVEAL_DELAY_MAX,
+  HEADER_ASCII_REVEAL_DELAY_MIN,
+  getHeaderTitleText,
+  headerMarkOptions,
+  headerTitleOptions,
+  normalizeHeaderAsciiDensity,
+  normalizeHeaderAsciiRevealDelay,
+  normalizeHeaderMark,
+  normalizeHeaderTitle,
+  type HeaderMark,
+  type HeaderTitle,
+} from './headerIdentity.ts'
+import {
+  normalizePortfolioLayout,
+  portfolioLayoutOptions,
+  type PortfolioLayout,
+} from './layoutTweaks.ts'
 
 type HeaderVariant =
   | 'full-width'
@@ -98,6 +108,20 @@ function useLiveReducedMotion() {
 
 const HERO_REPLAY_PROXIMITY_MARGIN = 160
 const IMPROVED_HEADLINE_STAGGER = 50
+const PORTFOLIO_LAYOUT_STORAGE_KEY = 'portfolio-page-layout-v1'
+const CURSOR_BALL_STORAGE_KEY = 'portfolio-cursor-ball-v1'
+const HEADER_IDENTITY_STORAGE_KEYS = {
+  title: 'portfolio-header-title-v1',
+  mark: 'portfolio-header-mark-v1',
+  scale: 'portfolio-header-ascii-scale-v1',
+  density: 'portfolio-header-ascii-density-v2',
+  depth: 'portfolio-header-ascii-depth-v1',
+  tilt: 'portfolio-header-ascii-tilt-v1',
+  palette: 'portfolio-header-ascii-palette-v1',
+  cameraResponse: 'portfolio-header-ascii-camera-response-v1',
+  revealDelay: 'portfolio-header-ascii-reveal-delay-v1',
+  revealDuration: 'portfolio-header-ascii-reveal-duration-v1',
+} as const
 const ASCII_STORAGE_KEYS = {
   scale: 'portfolio-ascii-scale-v3',
   density: 'portfolio-ascii-density-v3',
@@ -106,6 +130,7 @@ const ASCII_STORAGE_KEYS = {
   duration: 'portfolio-ascii-duration-v3',
   palette: 'portfolio-ascii-palette-v3',
   restState: 'portfolio-ascii-rest-state-v3',
+  cameraResponse: 'portfolio-ascii-camera-response-v1',
 } as const
 
 function isHeroInOrNearViewport(hero: HTMLElement | null) {
@@ -306,11 +331,248 @@ function ProjectVisual({ type }: { type: string }) {
   return <AdobeVisual />
 }
 
-function HeaderContents() {
+type StudioTab = 'work' | 'sides' | 'about'
+
+function StudioSplitLayout({
+  asciiScale,
+  asciiDensity,
+  asciiDepth,
+  asciiTilt,
+  asciiDuration,
+  asciiPalette,
+  asciiRestStateEnabled,
+  asciiCameraResponse,
+  shouldReduceMotion,
+}: {
+  asciiScale: number
+  asciiDensity: number
+  asciiDepth: number
+  asciiTilt: number
+  asciiDuration: number
+  asciiPalette: AsciiPalette
+  asciiRestStateEnabled: boolean
+  asciiCameraResponse: AsciiCameraResponse
+  shouldReduceMotion: boolean
+}) {
+  const [activeTab, setActiveTab] = useState<StudioTab>('work')
+
+  return (
+    <main className="studio-layout">
+      <section className="studio-layout__identity" aria-label="Introduction">
+        <div className="studio-layout__logo" aria-hidden="true">
+          <AsciiLogo
+            scale={asciiScale / 100}
+            density={asciiDensity}
+            depth={asciiDepth / 100}
+            tilt={asciiTilt}
+            duration={asciiDuration}
+            palette={asciiPalette}
+            startRotation={ASCII_START_ROTATION_DEFAULT}
+            rotationEnd={ASCII_ROTATION_END_DEFAULT}
+            assemblyEnd={ASCII_ASSEMBLY_END_DEFAULT}
+            revealDuration={ASCII_REVEAL_DURATION_DEFAULT}
+            easing="out"
+            playIntensity={ASCII_PLAY_INTENSITY_DEFAULT}
+            playSpeed={ASCII_PLAY_SPEED_DEFAULT}
+            restMode={asciiRestStateEnabled}
+            cameraResponse={asciiCameraResponse}
+            restStartDelay={ASCII_COPY_DELAY_DEFAULT}
+            optimized
+            reducedMotion={shouldReduceMotion}
+          />
+        </div>
+        <div className="studio-layout__intro">
+          <h1>
+            Product designer working at the intersection of{' '}
+            <em>scale, craft and complex systems.</em> Currently working at{' '}
+            {'\u00a0'}
+            <span className="microsoft-lockup">
+              <span className="microsoft-bitmap" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+                <span />
+              </span>
+              Microsoft.
+            </span>
+          </h1>
+        </div>
+        <div className="studio-layout__meta">
+          <span>Param Ranjan</span>
+          <span>Hyderabad, IN</span>
+        </div>
+      </section>
+
+      <section className="studio-layout__canvas">
+        <nav
+          className="studio-tabs"
+          aria-label="Portfolio sections"
+          role="tablist"
+        >
+          {(
+            [
+              ['work', 'Work'],
+              ['sides', 'Sides'],
+              ['about', 'About'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              type="button"
+              aria-controls="studio-tab-panel"
+              aria-selected={activeTab === value}
+              className="studio-tabs__button"
+              id={`studio-tab-${value}`}
+              onClick={() => setActiveTab(value)}
+              role="tab"
+              key={value}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div
+          className="studio-layout__content"
+          id="studio-tab-panel"
+          aria-labelledby={`studio-tab-${activeTab}`}
+          role="tabpanel"
+        >
+          {activeTab === 'work' && (
+            <div className="studio-work">
+              <div className="studio-section-heading">
+                <p>Selected work / 2025</p>
+              </div>
+              <div className="studio-work__list">
+                {projects.map((project) => (
+                  <a
+                    className="studio-project"
+                    href={project.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={project.number}
+                  >
+                    <div className="studio-project__topline">
+                      <span>{project.number}</span>
+                      <span>{project.client}</span>
+                      <span>{project.year}</span>
+                    </div>
+                    <h2>{project.title}</h2>
+                    <p>{project.summary}</p>
+                    <span className="studio-project__arrow">↗</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'sides' && (
+            <div className="studio-sides">
+              <div className="studio-section-heading">
+                <p>Outside the Figma file</p>
+                <h1>Other ways of looking.</h1>
+              </div>
+              <div className="studio-sides__grid">
+                {playground.map((item, index) => (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={item.title}
+                  >
+                    <span>0{index + 1} / {item.label}</span>
+                    <h2>{item.title}</h2>
+                    <p>{item.meta}</p>
+                    <i>↗</i>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'about' && (
+            <div className="studio-about">
+              <div className="studio-section-heading">
+                <p>About</p>
+                <h1>Always observing, always learning.</h1>
+              </div>
+              <div className="studio-about__body">
+                <p>
+                  I design products for complex systems, with a focus on making
+                  scale feel understandable and interaction feel considered.
+                </p>
+                <p>
+                  Away from product work, I mix music as rhyms, photograph
+                  small details and follow Formula 1.
+                </p>
+              </div>
+              <div className="studio-about__links">
+                <a
+                  href="https://www.paramranjan.com/about"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Connect <span>↗</span>
+                </a>
+                <a
+                  href="https://www.paramranjan.com/_files/ugd/2fbc36_10176191bfd34a29918a4aac3b727f4b.pdf"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Resume <span>↗</span>
+                </a>
+                <a
+                  href="https://soundcloud.com/rhymss"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  SoundCloud <span>↗</span>
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function HeaderContents({
+  title,
+  mark,
+  asciiScale,
+  asciiDensity,
+  asciiDepth,
+  asciiTilt,
+  asciiPalette,
+  asciiCameraResponse,
+}: {
+  title: HeaderTitle
+  mark: HeaderMark
+  asciiScale: number
+  asciiDensity: number
+  asciiDepth: number
+  asciiTilt: number
+  asciiPalette: AsciiPalette
+  asciiCameraResponse: AsciiCameraResponse
+}) {
   return (
     <>
       <a className="wordmark" href="#top" aria-label="Param Ranjan, home">
-        PR<span>®</span>
+        <span className="wordmark__stage" aria-hidden="true">
+          <span className="wordmark__text">
+            {getHeaderTitleText(title)}
+            <span className="wordmark__registered">®</span>
+          </span>
+          <HeaderAsciiMark
+            mark={mark}
+            scale={asciiScale / 100}
+            density={asciiDensity}
+            depth={asciiDepth}
+            tilt={asciiTilt}
+            palette={asciiPalette}
+            cameraResponse={asciiCameraResponse}
+          />
+        </span>
       </a>
       <nav aria-label="Primary navigation">
         <a href="#work">Work</a>
@@ -326,100 +588,13 @@ function HeaderContents() {
   )
 }
 
-function OriginalMotionHeader({
-  entranceComplete,
-  viewportWidth,
-}: {
-  entranceComplete: boolean
-  viewportWidth: number
-}) {
-  const { scrollY } = useScroll()
-  const motionProgress = useMotionValue(getHeaderScrollProgress(window.scrollY))
-  const motionTargetRef = useRef(getHeaderScrollProgress(window.scrollY))
-  const { pagePadding, floatingInset } =
-    getHeaderMorphLayout(viewportWidth)
-  const motionTop = useTransform(motionProgress, [0, 1], [0, 14])
-  const motionInset = useTransform(
-    motionProgress,
-    [0, 1],
-    [0, floatingInset],
-  )
-  const motionHeight = useTransform(motionProgress, [0, 1], [72, 54])
-  const motionPadding = useTransform(
-    motionProgress,
-    [0, 1],
-    [pagePadding, 22],
-  )
-  const motionShapeProgress = useTransform(
-    motionProgress,
-    [0, 0.03, 1],
-    [0, 0, 1],
-  )
-  const motionRadius = useTransform(motionShapeProgress, [0, 1], [0, 999])
-  const motionBorderColor = useTransform(
-    motionShapeProgress,
-    [0, 1],
-    ['rgba(241, 240, 235, 0)', 'rgba(241, 240, 235, 0.18)'],
-  )
-  const motionDivider = useTransform(
-    motionShapeProgress,
-    [0, 1],
-    [
-      'inset 0 -1px 0 rgba(241, 240, 235, 0.18)',
-      'inset 0 -1px 0 rgba(241, 240, 235, 0)',
-    ],
-  )
-
-  useAnimationFrame(() => {
-    const targetProgress = getHeaderScrollProgress(scrollY.get())
-    const currentProgress = motionProgress.get()
-    const nextProgress = getResponsiveHeaderProgress(
-      currentProgress,
-      targetProgress,
-      motionTargetRef.current,
-    )
-    motionTargetRef.current = targetProgress
-
-    if (nextProgress !== currentProgress) {
-      motionProgress.set(nextProgress)
-    }
-  })
-
-  useEffect(() => {
-    const progress = getHeaderScrollProgress(scrollY.get())
-    motionTargetRef.current = progress
-    motionProgress.set(progress)
-  }, [motionProgress, scrollY])
-
-  return (
-    <motion.header
-      className="site-header"
-      data-variant="motion-morph"
-      data-entrance-visible={entranceComplete}
-      aria-hidden={!entranceComplete}
-      style={{
-        top: motionTop,
-        right: motionInset,
-        left: motionInset,
-        height: motionHeight,
-        paddingLeft: motionPadding,
-        paddingRight: motionPadding,
-        borderRadius: motionRadius,
-        borderColor: motionBorderColor,
-        boxShadow: motionDivider,
-      }}
-    >
-      <HeaderContents />
-    </motion.header>
-  )
-}
-
 function App() {
-  const [motionProfile, setMotionProfile] = useState<MotionProfile>(() =>
-    normalizeMotionProfile(
-      localStorage.getItem('portfolio-motion-profile'),
-    ),
-  )
+  const [portfolioLayout, setPortfolioLayout] =
+    useState<PortfolioLayout>(() =>
+      normalizePortfolioLayout(
+        localStorage.getItem(PORTFOLIO_LAYOUT_STORAGE_KEY),
+      ),
+    )
   const [headerVariant, setHeaderVariant] = useState<HeaderVariant>(() => {
     const saved = localStorage.getItem('portfolio-header-variant')
     return saved === 'floating' ||
@@ -429,18 +604,70 @@ function App() {
       ? saved
       : 'full-width'
   })
-  const [tweaksOpen, setTweaksOpen] = useState(false)
-  const [heroAlignment, setHeroAlignment] = useState<HeroAlignment>(() =>
-    normalizeHeroAlignment(
-      localStorage.getItem('portfolio-hero-alignment-v2') ?? 'center',
+  const [cursorBallEnabled, setCursorBallEnabled] = useState(() =>
+    normalizeCursorBallEnabled(
+      localStorage.getItem(CURSOR_BALL_STORAGE_KEY),
     ),
   )
-  const [heroFontSize, setHeroFontSize] = useState(() =>
-    normalizeHeroFontSize(localStorage.getItem('portfolio-hero-font-size')),
+  const [tweaksOpen, setTweaksOpen] = useState(false)
+  const [headerTitle, setHeaderTitle] = useState<HeaderTitle>(() =>
+    normalizeHeaderTitle(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.title),
+    ),
   )
-  const [heroFont, setHeroFont] = useState<HeroFont>(() =>
-    normalizeHeroFont(localStorage.getItem('portfolio-hero-font')),
+  const [headerMark, setHeaderMark] = useState<HeaderMark>(() =>
+    normalizeHeaderMark(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.mark),
+    ),
   )
+  const [headerAsciiScale, setHeaderAsciiScale] = useState(() =>
+    normalizeAsciiScale(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.scale),
+    ),
+  )
+  const [headerAsciiDensity, setHeaderAsciiDensity] = useState(() =>
+    normalizeHeaderAsciiDensity(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.density),
+    ),
+  )
+  const [headerAsciiDepth, setHeaderAsciiDepth] = useState(() =>
+    normalizeAsciiDepth(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.depth),
+    ),
+  )
+  const [headerAsciiTilt, setHeaderAsciiTilt] = useState(() =>
+    normalizeAsciiTilt(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.tilt),
+    ),
+  )
+  const [headerAsciiPalette, setHeaderAsciiPalette] =
+    useState<AsciiPalette>(() =>
+      normalizeAsciiPalette(
+        localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.palette),
+      ),
+    )
+  const [headerAsciiCameraResponse, setHeaderAsciiCameraResponse] =
+    useState<AsciiCameraResponse>(() =>
+      normalizeAsciiCameraResponse(
+        localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.cameraResponse),
+      ),
+    )
+  const [headerAsciiRevealDelay, setHeaderAsciiRevealDelay] = useState(() =>
+    normalizeHeaderAsciiRevealDelay(
+      localStorage.getItem(HEADER_IDENTITY_STORAGE_KEYS.revealDelay),
+    ),
+  )
+  const [headerAsciiRevealDuration, setHeaderAsciiRevealDuration] =
+    useState(() =>
+      normalizeAsciiTravelDuration(
+        localStorage.getItem(
+          HEADER_IDENTITY_STORAGE_KEYS.revealDuration,
+        ),
+      ),
+    )
+  const heroAlignment: HeroAlignment = 'center'
+  const heroFontSize = 60
+  const heroFont: HeroFont = 'pp-mondwest'
   const [asciiScale, setAsciiScale] = useState(() =>
     normalizeAsciiScale(localStorage.getItem(ASCII_STORAGE_KEYS.scale)),
   )
@@ -464,6 +691,12 @@ function App() {
       localStorage.getItem(ASCII_STORAGE_KEYS.restState),
     ),
   )
+  const [asciiCameraResponse, setAsciiCameraResponse] =
+    useState<AsciiCameraResponse>(() =>
+      normalizeAsciiCameraResponse(
+        localStorage.getItem(ASCII_STORAGE_KEYS.cameraResponse),
+      ),
+    )
   const [asciiReplayKey, setAsciiReplayKey] = useState(0)
   const [asciiReady, setAsciiReady] = useState(false)
   const [asciiComplete, setAsciiComplete] = useState(false)
@@ -479,16 +712,9 @@ function App() {
   const heroRef = useRef<HTMLElement>(null)
   const hideHeaderForEntranceRef = useRef(true)
   const shouldReduceMotion = useLiveReducedMotion()
-  const originalMotionEnabled =
-    motionProfile === 'original' &&
-    headerVariant === 'motion-morph' &&
-    isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
   const eventDrivenMorphEnabled =
-    ((motionProfile === 'original' &&
-      headerVariant === 'scroll-morph') ||
-      (motionProfile === 'improved' &&
-        (headerVariant === 'scroll-morph' ||
-          headerVariant === 'motion-morph'))) &&
+    (headerVariant === 'scroll-morph' ||
+      headerVariant === 'motion-morph') &&
     isHeaderMorphEnabled(viewportWidth, shouldReduceMotion)
   const selectedHeroFont =
     heroFonts.find((font) => font.value === heroFont) ?? heroFonts[0]
@@ -523,26 +749,90 @@ function App() {
     '--ascii-improved-headline-delay': `${ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER}ms`,
     '--ascii-improved-footer-delay': `${ASCII_COPY_DELAY_DEFAULT + 250}ms`,
   }
+  const headerStyle: CSSProperties & {
+    '--header-ascii-duration': string
+  } = {
+    '--header-ascii-duration': `${headerAsciiRevealDuration}ms`,
+  }
+
+  useEffect(() => {
+    localStorage.setItem(PORTFOLIO_LAYOUT_STORAGE_KEY, portfolioLayout)
+  }, [portfolioLayout])
+
+  useEffect(() => {
+    localStorage.setItem(
+      CURSOR_BALL_STORAGE_KEY,
+      String(cursorBallEnabled),
+    )
+  }, [cursorBallEnabled])
 
   useEffect(() => {
     localStorage.setItem('portfolio-header-variant', headerVariant)
   }, [headerVariant])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-motion-profile', motionProfile)
-  }, [motionProfile])
+    localStorage.setItem(HEADER_IDENTITY_STORAGE_KEYS.title, headerTitle)
+  }, [headerTitle])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-hero-alignment-v2', heroAlignment)
-  }, [heroAlignment])
+    localStorage.setItem(HEADER_IDENTITY_STORAGE_KEYS.mark, headerMark)
+  }, [headerMark])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-hero-font-size', String(heroFontSize))
-  }, [heroFontSize])
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.scale,
+      String(headerAsciiScale),
+    )
+  }, [headerAsciiScale])
 
   useEffect(() => {
-    localStorage.setItem('portfolio-hero-font', heroFont)
-  }, [heroFont])
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.density,
+      String(headerAsciiDensity),
+    )
+  }, [headerAsciiDensity])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.depth,
+      String(headerAsciiDepth),
+    )
+  }, [headerAsciiDepth])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.tilt,
+      String(headerAsciiTilt),
+    )
+  }, [headerAsciiTilt])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.palette,
+      headerAsciiPalette,
+    )
+  }, [headerAsciiPalette])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.cameraResponse,
+      headerAsciiCameraResponse,
+    )
+  }, [headerAsciiCameraResponse])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.revealDelay,
+      String(headerAsciiRevealDelay),
+    )
+  }, [headerAsciiRevealDelay])
+
+  useEffect(() => {
+    localStorage.setItem(
+      HEADER_IDENTITY_STORAGE_KEYS.revealDuration,
+      String(headerAsciiRevealDuration),
+    )
+  }, [headerAsciiRevealDuration])
 
   useEffect(() => {
     localStorage.setItem(ASCII_STORAGE_KEYS.scale, String(asciiScale))
@@ -576,52 +866,13 @@ function App() {
   }, [asciiRestStateEnabled])
 
   useEffect(() => {
-    if (motionProfile !== 'original') return
-
-    if (shouldReduceMotion) {
-      setEntranceComplete(true)
-      setPostHeroContentVisible(true)
-      hideHeaderForEntranceRef.current = true
-      return
-    }
-
-    if (hideHeaderForEntranceRef.current) {
-      setEntranceComplete(false)
-      setPostHeroContentVisible(false)
-    } else {
-      setPostHeroContentVisible(true)
-    }
-    const contentTimer = hideHeaderForEntranceRef.current
-      ? window.setTimeout(
-          () => setPostHeroContentVisible(true),
-          asciiDuration + ASCII_COPY_DELAY_DEFAULT,
-        )
-      : 0
-    const totalDuration =
-      asciiDuration +
-      Math.max(
-        ASCII_TRAVEL_DURATION_DEFAULT,
-        ASCII_COPY_DELAY_DEFAULT + ASCII_COPY_DURATION_DEFAULT,
-      )
-    const timer = window.setTimeout(() => {
-      setEntranceComplete(true)
-      hideHeaderForEntranceRef.current = true
-    }, totalDuration)
-
-    return () => {
-      window.clearTimeout(contentTimer)
-      window.clearTimeout(timer)
-    }
-  }, [
-    asciiDuration,
-    asciiReplayKey,
-    motionProfile,
-    shouldReduceMotion,
-  ])
+    localStorage.setItem(
+      ASCII_STORAGE_KEYS.cameraResponse,
+      asciiCameraResponse,
+    )
+  }, [asciiCameraResponse])
 
   useEffect(() => {
-    if (motionProfile !== 'improved') return
-
     if (shouldReduceMotion) {
       setPostHeroContentVisible(true)
       return
@@ -640,10 +891,10 @@ function App() {
     )
 
     return () => window.clearTimeout(timer)
-  }, [asciiComplete, motionProfile, shouldReduceMotion])
+  }, [asciiComplete, shouldReduceMotion])
 
   useEffect(() => {
-    if (motionProfile !== 'improved' || !asciiComplete) return
+    if (!asciiComplete) return
 
     if (shouldReduceMotion) {
       setAsciiEntranceSettledWithoutAnimation(true)
@@ -662,14 +913,10 @@ function App() {
     }, postAssemblyDuration)
 
     return () => window.clearTimeout(timer)
-  }, [asciiComplete, motionProfile, shouldReduceMotion])
+  }, [asciiComplete, shouldReduceMotion])
 
   useEffect(() => {
-    if (
-      motionProfile !== 'improved' ||
-      asciiComplete ||
-      entranceComplete
-    ) {
+    if (asciiComplete || entranceComplete) {
       return
     }
 
@@ -700,7 +947,6 @@ function App() {
     asciiComplete,
     asciiReplayKey,
     entranceComplete,
-    motionProfile,
   ])
 
   useEffect(() => {
@@ -795,6 +1041,45 @@ function App() {
     }
   }, [eventDrivenMorphEnabled])
 
+  useEffect(() => {
+    const header = headerRef.current
+    if (!header) return
+
+    let frame = 0
+    let revealTimer = 0
+    const updateIdentity = () => {
+      frame = 0
+      window.clearTimeout(revealTimer)
+
+      if (getHeaderScrollProgress(window.scrollY) < 0.56) {
+        header.dataset.identity = 'text'
+        return
+      }
+
+      revealTimer = window.setTimeout(() => {
+        if (getHeaderScrollProgress(window.scrollY) >= 0.56) {
+          header.dataset.identity = 'ascii'
+        }
+      }, headerAsciiRevealDelay)
+    }
+    const scheduleUpdate = () => {
+      if (frame === 0) {
+        frame = window.requestAnimationFrame(updateIdentity)
+      }
+    }
+
+    updateIdentity()
+    window.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleUpdate)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(revealTimer)
+      window.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+    }
+  }, [headerAsciiRevealDelay])
+
   const replayAsciiEntrance = useCallback(() => {
     const hideHeaderForEntrance = isHeroInOrNearViewport(heroRef.current)
     hideHeaderForEntranceRef.current = hideHeaderForEntrance
@@ -805,15 +1090,6 @@ function App() {
     setPostHeroContentVisible(!hideHeaderForEntrance)
     setAsciiReplayKey((key) => key + 1)
   }, [])
-
-  const selectMotionProfile = useCallback(
-    (profile: MotionProfile) => {
-      if (profile === motionProfile) return
-      setMotionProfile(profile)
-      replayAsciiEntrance()
-    },
-    [motionProfile, replayAsciiEntrance],
-  )
 
   const handleAsciiReady = useCallback(() => {
     setAsciiReady(true)
@@ -826,32 +1102,43 @@ function App() {
   return (
     <div
       className="site"
-      data-motion-profile={motionProfile}
+      data-layout={portfolioLayout}
+      data-motion-profile="improved"
       data-post-hero-content-visible={postHeroContentVisible}
+      data-cursor-launcher={
+        cursorBallEnabled && !shouldReduceMotion
+      }
     >
       <div className="noise-overlay" aria-hidden="true">
         <div className="noise-overlay__tile" />
       </div>
-      {originalMotionEnabled ? (
-        <OriginalMotionHeader
-          key={getHeaderRenderKey(true)}
-          entranceComplete={entranceComplete}
-          viewportWidth={viewportWidth}
-        />
-      ) : (
-        <motion.header
-          key={getHeaderRenderKey(false)}
-          ref={headerRef}
-          className="site-header"
-          data-variant={headerVariant}
-          data-entrance-visible={entranceComplete}
-          aria-hidden={!entranceComplete}
-        >
-          <HeaderContents />
-        </motion.header>
-      )}
+      <CursorBallLauncher
+        enabled={cursorBallEnabled && !shouldReduceMotion}
+      />
+      {portfolioLayout === 'current' ? (
+        <>
+          <motion.header
+            ref={headerRef}
+            className="site-header"
+            data-variant={headerVariant}
+            data-identity="text"
+            data-entrance-visible={entranceComplete}
+            aria-hidden={!entranceComplete}
+            style={headerStyle}
+          >
+            <HeaderContents
+              title={headerTitle}
+              mark={headerMark}
+              asciiScale={headerAsciiScale}
+              asciiDensity={headerAsciiDensity}
+              asciiDepth={headerAsciiDepth}
+              asciiTilt={headerAsciiTilt}
+              asciiPalette={headerAsciiPalette}
+              asciiCameraResponse={headerAsciiCameraResponse}
+            />
+          </motion.header>
 
-      <main>
+          <main>
         <section
           ref={heroRef}
           className="hero"
@@ -881,14 +1168,13 @@ function App() {
             playIntensity={ASCII_PLAY_INTENSITY_DEFAULT}
             playSpeed={ASCII_PLAY_SPEED_DEFAULT}
             restMode={asciiRestStateEnabled}
+            cameraResponse={asciiCameraResponse}
             restStartDelay={
               shouldReduceMotion
                 ? 0
-                : motionProfile === 'improved'
-                  ? ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER
-                  : ASCII_COPY_DELAY_DEFAULT
+                : ASCII_COPY_DELAY_DEFAULT + IMPROVED_HEADLINE_STAGGER
             }
-            optimized={motionProfile === 'improved'}
+            optimized
             reducedMotion={shouldReduceMotion === true}
             onReady={handleAsciiReady}
             onComplete={handleAsciiComplete}
@@ -1018,9 +1304,9 @@ function App() {
             <span>Growing a small jungle</span>
           </div>
         </section>
-      </main>
+          </main>
 
-      <footer id="contact">
+          <footer id="contact">
         <div className="footer-grid">
           <p>
             Always Observing, Always Learning.
@@ -1056,7 +1342,21 @@ function App() {
           </span>
           <a href="#top">Back to top ↑</a>
         </div>
-      </footer>
+          </footer>
+        </>
+      ) : (
+        <StudioSplitLayout
+          asciiScale={asciiScale}
+          asciiDensity={asciiDensity}
+          asciiDepth={asciiDepth}
+          asciiTilt={asciiTilt}
+          asciiDuration={asciiDuration}
+          asciiPalette={asciiPalette}
+          asciiRestStateEnabled={asciiRestStateEnabled}
+          asciiCameraResponse={asciiCameraResponse}
+          shouldReduceMotion={shouldReduceMotion}
+        />
+      )}
 
       <div className="header-tweaks">
         {tweaksOpen && (
@@ -1075,19 +1375,35 @@ function App() {
               </button>
             </div>
             <div className="header-tweaks__section">
-              <span className="header-tweaks__label">Motion profile</span>
+              <span className="header-tweaks__label">Page layout</span>
+              <div className="header-tweaks__options">
+                {portfolioLayoutOptions.map((option) => (
+                  <button
+                    type="button"
+                    aria-pressed={portfolioLayout === option.value}
+                    onClick={() => setPortfolioLayout(option.value)}
+                    key={option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">Cursor launcher</span>
               <div className="header-tweaks__options">
                 {(
                   [
-                    ['improved', 'Improved'],
-                    ['original', 'Original'],
+                    [true, 'On'],
+                    [false, 'Off'],
                   ] as const
                 ).map(([value, label]) => (
                   <button
                     type="button"
-                    aria-pressed={motionProfile === value}
-                    onClick={() => selectMotionProfile(value)}
-                    key={value}
+                    aria-pressed={cursorBallEnabled === value}
+                    onClick={() => setCursorBallEnabled(value)}
+                    key={label}
                   >
                     {label}
                   </button>
@@ -1120,18 +1436,152 @@ function App() {
             </div>
 
             <div className="header-tweaks__section">
-              <span className="header-tweaks__label">Hero alignment</span>
+              <span className="header-tweaks__label">Header title</span>
+              <div className="header-tweaks__options">
+                {headerTitleOptions.map((option) => (
+                  <button
+                    type="button"
+                    aria-pressed={headerTitle === option.value}
+                    onClick={() => setHeaderTitle(option.value)}
+                    style={{
+                      fontFamily:
+                        "'PP Mondwest', 'PP Mori', Arial, sans-serif",
+                    }}
+                    key={option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">Header mark</span>
+              <div className="header-tweaks__options">
+                {headerMarkOptions.map((option) => (
+                  <button
+                    type="button"
+                    aria-pressed={headerMark === option.value}
+                    onClick={() => setHeaderMark(option.value)}
+                    key={option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">
+                Header ASCII palette
+              </span>
+              <div className="header-tweaks__options header-tweaks__options--three">
+                {asciiPalettes.map((palette) => (
+                  <button
+                    type="button"
+                    aria-pressed={headerAsciiPalette === palette.value}
+                    onClick={() => setHeaderAsciiPalette(palette.value)}
+                    key={palette.value}
+                  >
+                    {palette.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="header-ascii-scale"
+              >
+                <span>Header ASCII scale</span>
+                <output htmlFor="header-ascii-scale">
+                  {headerAsciiScale}%
+                </output>
+              </label>
+              <input
+                id="header-ascii-scale"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_SCALE_MIN}
+                max={ASCII_SCALE_MAX}
+                step="1"
+                value={headerAsciiScale}
+                onChange={(event) =>
+                  setHeaderAsciiScale(
+                    normalizeAsciiScale(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="header-ascii-density"
+              >
+                <span>Header ASCII density</span>
+                <output htmlFor="header-ascii-density">
+                  {headerAsciiDensity}
+                </output>
+              </label>
+              <input
+                id="header-ascii-density"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_DENSITY_MIN}
+                max={ASCII_DENSITY_MAX}
+                step="1"
+                value={headerAsciiDensity}
+                onChange={(event) =>
+                  setHeaderAsciiDensity(
+                    normalizeHeaderAsciiDensity(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="header-ascii-depth"
+              >
+                <span>Header 3D depth</span>
+                <output htmlFor="header-ascii-depth">
+                  {headerAsciiDepth}
+                </output>
+              </label>
+              <input
+                id="header-ascii-depth"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_DEPTH_MIN}
+                max={ASCII_DEPTH_MAX}
+                step="1"
+                value={headerAsciiDepth}
+                onChange={(event) =>
+                  setHeaderAsciiDepth(
+                    normalizeAsciiDepth(event.currentTarget.value),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">
+                Header camera response
+              </span>
               <div className="header-tweaks__options">
                 {(
                   [
-                    ['left', 'Left aligned'],
-                    ['center', 'Center aligned'],
+                    ['off', 'Off'],
+                    ['subtle', 'Subtle'],
                   ] as const
                 ).map(([value, label]) => (
                   <button
                     type="button"
-                    aria-pressed={heroAlignment === value}
-                    onClick={() => setHeroAlignment(value)}
+                    aria-pressed={headerAsciiCameraResponse === value}
+                    onClick={() => setHeaderAsciiCameraResponse(value)}
                     key={value}
                   >
                     {label}
@@ -1143,42 +1593,83 @@ function App() {
             <div className="header-tweaks__section">
               <label
                 className="header-tweaks__range-label"
-                htmlFor="hero-font-size"
+                htmlFor="header-ascii-tilt"
               >
-                <span>Hero font size</span>
-                <output htmlFor="hero-font-size">{heroFontSize}px</output>
+                <span>Header final tilt</span>
+                <output htmlFor="header-ascii-tilt">
+                  {headerAsciiTilt}°
+                </output>
               </label>
               <input
-                id="hero-font-size"
+                id="header-ascii-tilt"
                 className="header-tweaks__range"
                 type="range"
-                min={HERO_FONT_SIZE_MIN}
-                max={HERO_FONT_SIZE_MAX}
+                min={ASCII_TILT_MIN}
+                max={ASCII_TILT_MAX}
                 step="1"
-                value={heroFontSize}
+                value={headerAsciiTilt}
                 onChange={(event) =>
-                  setHeroFontSize(
-                    normalizeHeroFontSize(event.currentTarget.value),
+                  setHeaderAsciiTilt(
+                    normalizeAsciiTilt(event.currentTarget.value),
                   )
                 }
               />
             </div>
 
             <div className="header-tweaks__section">
-              <span className="header-tweaks__label">Hero font</span>
-              <div className="header-tweaks__options header-tweaks__options--fonts">
-                {heroFonts.map((font) => (
-                  <button
-                    type="button"
-                    aria-pressed={heroFont === font.value}
-                    onClick={() => setHeroFont(font.value)}
-                    style={{ fontFamily: font.family }}
-                    key={font.value}
-                  >
-                    {font.label}
-                  </button>
-                ))}
-              </div>
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="header-ascii-reveal-delay"
+              >
+                <span>Header reveal delay</span>
+                <output htmlFor="header-ascii-reveal-delay">
+                  {headerAsciiRevealDelay}ms
+                </output>
+              </label>
+              <input
+                id="header-ascii-reveal-delay"
+                className="header-tweaks__range"
+                type="range"
+                min={HEADER_ASCII_REVEAL_DELAY_MIN}
+                max={HEADER_ASCII_REVEAL_DELAY_MAX}
+                step="50"
+                value={headerAsciiRevealDelay}
+                onChange={(event) =>
+                  setHeaderAsciiRevealDelay(
+                    normalizeHeaderAsciiRevealDelay(
+                      event.currentTarget.value,
+                    ),
+                  )
+                }
+              />
+            </div>
+
+            <div className="header-tweaks__section">
+              <label
+                className="header-tweaks__range-label"
+                htmlFor="header-ascii-reveal-duration"
+              >
+                <span>Header reveal speed</span>
+                <output htmlFor="header-ascii-reveal-duration">
+                  {(headerAsciiRevealDuration / 1000).toFixed(1)}s
+                </output>
+              </label>
+              <input
+                id="header-ascii-reveal-duration"
+                className="header-tweaks__range"
+                type="range"
+                min={ASCII_TRAVEL_DURATION_MIN}
+                max={ASCII_TRAVEL_DURATION_MAX}
+                step="50"
+                value={headerAsciiRevealDuration}
+                onChange={(event) =>
+                  setHeaderAsciiRevealDuration(
+                    normalizeAsciiTravelDuration(
+                      event.currentTarget.value,
+                    ),
+                  )
+                }
+              />
             </div>
 
             <div className="header-tweaks__divider" />
@@ -1290,6 +1781,27 @@ function App() {
                   )
                 }
               />
+            </div>
+
+            <div className="header-tweaks__section">
+              <span className="header-tweaks__label">Camera response</span>
+              <div className="header-tweaks__options">
+                {(
+                  [
+                    ['off', 'Off'],
+                    ['subtle', 'Subtle'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    type="button"
+                    aria-pressed={asciiCameraResponse === value}
+                    onClick={() => setAsciiCameraResponse(value)}
+                    key={value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="header-tweaks__section">

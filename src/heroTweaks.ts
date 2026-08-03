@@ -1,6 +1,6 @@
 export const HERO_FONT_SIZE_MIN = 48
 export const HERO_FONT_SIZE_MAX = 140
-export const HERO_FONT_SIZE_DEFAULT = 100
+export const HERO_FONT_SIZE_DEFAULT = 60
 
 export const heroFonts = [
   {
@@ -26,13 +26,13 @@ export type HeroFont = (typeof heroFonts)[number]['value']
 export function normalizeHeroAlignment(
   value: string | null,
 ): HeroAlignment {
-  return value === 'center' ? 'center' : 'left'
+  return value === 'left' ? 'left' : 'center'
 }
 
 export function normalizeHeroFont(value: string | null): HeroFont {
   return heroFonts.some((font) => font.value === value)
     ? (value as HeroFont)
-    : 'pp-mori'
+    : 'pp-mondwest'
 }
 
 export function normalizeHeroFontSize(value: string | null) {

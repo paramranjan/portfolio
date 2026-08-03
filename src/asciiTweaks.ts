@@ -60,6 +60,10 @@ export const ASCII_PLAY_SPEED_DEFAULT = 140
 
 export const ASCII_REST_STATE_DEFAULT = true
 
+export const ASCII_CAMERA_RESPONSE_DEFAULT = 'subtle'
+
+export type AsciiCameraResponse = 'off' | 'subtle'
+
 export const asciiPalettes = [
   { value: 'site', label: 'Site' },
   { value: 'blue', label: 'Blue' },
@@ -229,6 +233,14 @@ export function normalizeAsciiRestState(value: string | null) {
   if (value === 'true') return true
   if (value === 'false') return false
   return ASCII_REST_STATE_DEFAULT
+}
+
+export function normalizeAsciiCameraResponse(
+  value: string | null,
+): AsciiCameraResponse {
+  return value === 'off' || value === 'subtle'
+    ? value
+    : ASCII_CAMERA_RESPONSE_DEFAULT
 }
 
 export function normalizeAsciiPalette(value: string | null): AsciiPalette {

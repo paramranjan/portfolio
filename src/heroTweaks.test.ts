@@ -14,9 +14,9 @@ test('restores valid hero tweak choices', () => {
 })
 
 test('uses safe defaults for invalid saved hero tweaks', () => {
-  assert.equal(normalizeHeroAlignment('right'), 'left')
-  assert.equal(normalizeHeroFont('comic-sans'), 'pp-mori')
-  assert.equal(normalizeHeroFontSize('not-a-number'), 100)
+  assert.equal(normalizeHeroAlignment('right'), 'center')
+  assert.equal(normalizeHeroFont('comic-sans'), 'pp-mondwest')
+  assert.equal(normalizeHeroFontSize('not-a-number'), 60)
 })
 
 test('keeps the hero size slider within its supported range', () => {

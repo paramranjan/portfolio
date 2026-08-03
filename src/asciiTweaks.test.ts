@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   getAsciiEasingCss,
+  normalizeAsciiCameraResponse,
   normalizeAsciiAssemblyEnd,
   normalizeAsciiCopyDelay,
   normalizeAsciiCopyDuration,
@@ -41,6 +42,7 @@ test('restores valid ASCII logo settings', () => {
   assert.equal(normalizeAsciiPlayIntensity('55'), 55)
   assert.equal(normalizeAsciiPlaySpeed('140'), 140)
   assert.equal(normalizeAsciiRestState('true'), true)
+  assert.equal(normalizeAsciiCameraResponse('subtle'), 'subtle')
   assert.equal(getAsciiEasingCss('linear'), 'linear')
 })
 
@@ -64,6 +66,7 @@ test('uses safe defaults for invalid ASCII logo settings', () => {
   assert.equal(normalizeAsciiPlaySpeed('fast'), 140)
   assert.equal(normalizeAsciiRestState(null), true)
   assert.equal(normalizeAsciiRestState('enabled'), true)
+  assert.equal(normalizeAsciiCameraResponse('strong'), 'subtle')
 })
 
 test('uses the live ASCII preset when storage is missing', () => {
@@ -74,6 +77,7 @@ test('uses the live ASCII preset when storage is missing', () => {
   assert.equal(normalizeAsciiDuration(null), 1900)
   assert.equal(normalizeAsciiPalette(null), 'site')
   assert.equal(normalizeAsciiRestState(null), true)
+  assert.equal(normalizeAsciiCameraResponse(null), 'subtle')
 })
 
 test('keeps numeric ASCII controls within their supported ranges', () => {
